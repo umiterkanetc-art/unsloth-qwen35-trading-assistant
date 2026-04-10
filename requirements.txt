@@ -11,6 +11,8 @@
 # notebook ergonomics, and Hugging Face Hub interaction from VS Code.
 
 huggingface_hub>=0.34.0
+requests>=2.32.0
+pandas>=2.2.0
 hf_transfer>=0.1.8
 ipywidgets>=8.1.5
 jupyterlab>=4.2.5
