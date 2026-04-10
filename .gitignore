@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code and editor state
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Local secrets and environment files
+.env
+.env.*
+*.secret
+secrets/
+
+# Hugging Face and model caches
+.cache/
+.hf/
+huggingface/
+hf_home/
+transformers_cache/
+datasets_cache/
+
+# ML experiment outputs
+artifacts/
+outputs/
+checkpoints/
+adapters/
+models/
+logs/
+mlruns/
+wandb/
+
+# Large model and training artifacts
+*.bin
+*.ckpt
+*.gguf
+*.h5
+*.lora
+*.onnx
+*.pb
+*.pt
+*.pth
+*.safetensors
+*.tar
+*.tar.gz
+*.zip
+
+# Colab runtime leftovers
+/content/
+

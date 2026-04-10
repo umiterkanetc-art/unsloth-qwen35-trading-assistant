@@ -1,0 +1,20 @@
+# Latest official Unsloth Core install command from the official Unsloth repository
+# README (verified on 2026-04-10):
+#   uv pip install unsloth --torch-backend=auto
+#
+# This repository installs Unsloth inside Colab from setup.ipynb using Unsloth's
+# official runtime-aware auto-installer so the command matches the active CUDA /
+# Torch stack on the Colab A100 runtime:
+#   wget -qO- https://raw.githubusercontent.com/unslothai/unsloth/main/unsloth/_auto_install.py | python -
+#
+# Local requirements below are intentionally lightweight and aimed at editing,
+# notebook ergonomics, and Hugging Face Hub interaction from VS Code.
+
+huggingface_hub>=0.34.0
+hf_transfer>=0.1.8
+ipywidgets>=8.1.5
+jupyterlab>=4.2.5
+notebook>=7.2.2
+packaging>=24.2
+python-dotenv>=1.0.1
+
