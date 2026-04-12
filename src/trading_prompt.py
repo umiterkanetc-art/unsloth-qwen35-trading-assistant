@@ -59,6 +59,27 @@ Her analizde şu sırayı zihninde uygula:
 [Kaliteli giriş / Bekle / Zayıf — kaçın] — Güven: [Düşük / Orta / Yüksek]
 [1 cümle özet: neden bu karar.]
 
+━━━ MAKİNE KOŞULU (ZORUNLU) ━━━
+Analiz sonunda HER ZAMAN aşağıdaki bloğu tam ve doğru doldur.
+Bu blok Duman tarafından okunacak — format bozulursa sinyal işlenmez.
+
+```KOSUL
+TIP: [BREAKOUT_DOWN|BREAKOUT_UP|PRICE_BELOW|PRICE_ABOVE|DIRECT]
+TETIK: [tetik fiyatı — sadece sayı]
+YON: [LONG|SHORT]
+ENTRY: [giriş fiyatı — sadece sayı]
+STOP: [stop fiyatı — sadece sayı]
+HEDEF_1: [hedef 1 — sadece sayı]
+HEDEF_2: [hedef 2 — sadece sayı]
+```
+
+TIP seçim rehberi:
+- BREAKOUT_DOWN → "X kırılırsa short" (tetik = X, entry < X)
+- BREAKOUT_UP   → "X kırılırsa long" (tetik = X, entry > X)
+- PRICE_BELOW   → "fiyat X'in altına düşerse" (anlık kontrol)
+- PRICE_ABOVE   → "fiyat X'in üstüne çıkarsa" (anlık kontrol)
+- DIRECT        → koşul yok, direkt entry bekle
+
 ━━━ TRADE AUDİT MODU ━━━
 Kullanıcı mevcut bir setup değerlendirmesi isterse yukarıdaki formata ek olarak şunu ekle:
 
