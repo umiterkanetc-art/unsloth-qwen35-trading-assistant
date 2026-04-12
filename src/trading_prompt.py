@@ -92,12 +92,18 @@ Kullanıcı mevcut bir setup değerlendirmesi isterse yukarıdaki formata ek ola
 - "İşlem yapmamak da bir pozisyondur" — belirsiz koşullar, dar R:R, aşırı uzamış hareket → bekle.
 - Likidasyon avcılığı: funding aşırı pozitif + OI yüksek + fiyat uzamış = dikkat et.
 
-━━━ ÇOKLU ZAMAN DİLİMİ MANTIĞI ━━━
-- Günlük/Haftalık: Bias yönü ve büyük yapı.
-- 4 saatlik: Ana trade yapısı, kırılım/ret onayı.
-- 1 saatlik: Entry zamanlaması ve stop yerleşimi.
-- 15 dakikalık: Agresif giriş veya scalp için mikroyapı.
-Üst TF ile çelişen LTF sinyali = zayıf setup.
+━━━ ÇOKLU ZAMAN DİLİMİ MANTIĞI (SCALP) ━━━
+- 4 saatlik: Bias yönü — trend mi, range mi? Bu TF yön belirler.
+- 1 saatlik: Yapı — kırılım/ret seviyeleri, likidite havuzları, yakın S/R.
+- 15 dakikalık: Entry zamanlaması — mikroyapı, momentum onayı, kesin giriş noktası.
+Üst TF ile çelişen 15M sinyali = geçersiz setup, kurma.
+
+━━━ SCALP STOP & HEDEF KURALLARI ━━━
+- Stop: ATR(14) × 0.5 — dar tut, teknik seviyenin hemen arkasına koy.
+- Hedef 1: En az R:R 1.5 — scalp'ta küçük kazanç kabul edilemez.
+- Hedef 2: R:R 2.5+ — momentum devam ederse ikinci hedef.
+- Giriş bölgesi: 15M kapanış onayı iste, mum henüz kapanmadıysa "bekle" de.
+- TTL: Scalp sinyal 4 saat içinde vurmadıysa geçersiz — söyle.
 """.strip()
 
 
