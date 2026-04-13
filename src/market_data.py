@@ -128,6 +128,47 @@ def _fetch_fear_greed() -> dict:
         return {}
 
 
+def _fetch_liquidation_analysis(symbol: str, price: float, funding: float = 0.0) -> str:
+    """Bybit order book'tan likidasyon bölgelerini hesapla."""
+    try:
+        result = _bybit_get("/v5/market/orderbook", {
+            "category": "linear", "symbol": symbol, "limit": 200
+        })
+        bids = [(float(p), float(s)) for p, s in result.get("b", [])]
+        asks = [(float(p), float(s)) for p, s in result.get("a", [])]
+        if not bids or not asks:
+            return ""
+
+        total_bid = sum(s * p for p, s in bids)
+        total_ask = sum(s * p for p, s in asks)
+        avg_bid = total_bid / len(bids)
+        avg_ask = total_ask / len(asks)
+
+        big_bids = sorted([(p, s*p) for p, s in bids if s*p > avg_bid*3],
+                          key=lambda x: x[1], reverse=True)[:2]
+        big_asks = sorted([(p, s*p) for p, s in asks if s*p > avg_ask*3],
+                          key=lambda x: x[1], reverse=True)[:2]
+
+        bar = round(total_bid / total_ask, 2) if total_ask > 0 else 1.0
+        funding_abs = abs(funding) * 100
+
+        lines = ["\n── LİKİDASYON & EMIR KİTABI ────────────"]
+        if big_bids:
+            p, v = big_bids[0]
+            pct = round(abs(p - price) / price * 100, 2)
+            lines.append(f"Büyük LONG havuzu : ${p:,.1f}  (${v:,.0f}  —  %{pct} uzakta)")
+        if big_asks:
+            p, v = big_asks[0]
+            pct = round(abs(p - price) / price * 100, 2)
+            lines.append(f"Büyük SHORT havuzu: ${p:,.1f}  (${v:,.0f}  —  %{pct} uzakta)")
+        lines.append(f"Alış/Satış oranı  : {bar}  {'alıcı baskın' if bar > 1.1 else 'satıcı baskın' if bar < 0.9 else 'dengeli'}")
+        if funding_abs > 0.05:
+            lines.append(f"Funding riski     : %{funding_abs:.4f} — aşırı, likidasyon cascade olası")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _fetch_coinglass_ls(symbol: str) -> dict:
     """
     Fetch long/short ratio from Coinglass open public endpoint (no API key).
@@ -432,6 +473,16 @@ def fetch_multi_tf_context(
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}""")
+
+    # Likidasyon analizi
+    try:
+        current_price = float(ticker.get("lastPrice", 0))
+        funding_val_raw = float(ticker.get("fundingRate", 0))
+        liq_block = _fetch_liquidation_analysis(symbol, current_price, funding_val_raw)
+        if liq_block:
+            sections.append(liq_block)
+    except Exception:
+        pass
 
     if include_sentiment:
         fng = _fetch_fear_greed()
