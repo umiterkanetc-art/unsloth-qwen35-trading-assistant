@@ -1,0 +1,71 @@
+# ╔══════════════════════════════════════════════════════════╗
+# ║  HUCRE 1 — KURULUM  (sadece ilk seferde calistir)       ║
+# ╚══════════════════════════════════════════════════════════╝
+
+# ── Unsloth guncelle ──────────────────────────────────────
+import subprocess, sys
+print("Unsloth guncelleniyor...")
+subprocess.run([
+    sys.executable, "-m", "pip", "install", "-q", "-U",
+    "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
+    "unsloth_zoo"
+], check=False)
+print("OK Unsloth guncellendi.")
+
+# ── Repo clone / update ───────────────────────────────────
+import subprocess, pathlib, sys
+
+def _run(cmd: list[str], **kwargs) -> str:
+    result = subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+    output = (result.stdout + result.stderr).strip()
+    if result.returncode != 0:
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{output}")
+    return output
+
+def git_pull_latest():
+    """Clone the repo on first run; fast-forward pull on subsequent runs."""
+    repo = pathlib.Path(REPO_DIR)
+    if repo.exists():
+        print(_run(["git", "-C", str(repo), "pull", "--ff-only"]))
+    else:
+        print(_run(["git", "clone", REPO_URL, str(repo)]))
+    # Add repo to Python path so `src` is importable
+    if str(repo) not in sys.path:
+        sys.path.insert(0, str(repo))
+    print(f"Repo ready at {repo}")
+
+git_pull_latest()
+
+# ── HF login ─────────────────────────────────────────────
+import os
+
+REPO_URL = os.environ.get(
+    "PROJECT_REPO_URL",
+    "https://github.com/umiterkanetc-art/unsloth-qwen35-trading-assistant.git",
+)
+HF_TOKEN = os.environ.get("HF_TOKEN", "")
+
+# ── Model seçimi ────────────────────────────────────────────────────────────
+# Qwen3-32B: Qwen3.5-27B'ye göre daha güçlü reasoning, native thinking modu,
+#            A100 80GB'de 4-bit ile ~18GB VRAM kullanır.
+MODEL_NAME     = "unsloth/Qwen3-32B"
+MAX_SEQ_LENGTH = 16384   # 16k context — reasoning zinciri için gerekli
+DTYPE          = None    # auto-detect (BF16 on A100)
+LOAD_IN_4BIT   = True    # ~18GB VRAM
+
+REPO_DIR = "/content/unsloth-qwen35-trading-assistant"
+
+print(f"Model   : {MODEL_NAME}")
+print(f"Context : {MAX_SEQ_LENGTH} tokens")
+print(f"4-bit   : {LOAD_IN_4BIT}")
+print(f"Repo    : {REPO_URL}")
+print(f"HF token: {'set' if HF_TOKEN else 'not set'}")
+if HF_TOKEN:
+    from huggingface_hub import login
+    login(token=HF_TOKEN, add_to_git_credential=False)
+    print("Logged in to Hugging Face Hub.")
+else:
+    print("No HF_TOKEN set — skipping login (public model download will still work).")
+
+print()
+print("OK Kurulum tamamlandi. Artik Hucre 2'yi calistirabilirsin.")
