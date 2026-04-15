@@ -10,12 +10,13 @@ import requests
 import pandas as pd
 import math
 
-# Binance Futures REST API — accessible from Colab/cloud
-BINANCE_FAPI   = "https://fapi.binance.com"
+# Binance Spot REST API — no geo-restriction from cloud/Colab IPs
+# (Futures API /fapi.binance.com blocks US-based IPs with 451)
+BINANCE_SPOT   = "https://api.binance.com"
 COINGLASS_BASE = "https://open-api.coinglass.com/public/v2"
 FNG_URL        = "https://api.alternative.me/fng/"
 
-# Binance Futures uses the same TF codes as human-readable format
+# Binance uses the same TF codes as human-readable format
 TIMEFRAME_MAP: dict[str, str] = {
     "1m":  "1m",
     "5m":  "5m",
@@ -42,8 +43,8 @@ def _get(url: str, params: dict, timeout: int = 10) -> dict:
 
 
 def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    """Binance Futures klines — returns same DataFrame schema as before."""
-    url  = BINANCE_FAPI + "/fapi/v1/klines"
+    """Binance Spot klines — OHLCV, no geo-restriction from cloud IPs."""
+    url  = BINANCE_SPOT + "/api/v3/klines"
     rows = _get(url, {"symbol": symbol, "interval": interval, "limit": limit})
     # Binance klines: [open_time, open, high, low, close, volume, close_time, ...]
     df = pd.DataFrame(rows, columns=[
@@ -60,33 +61,31 @@ def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
 
 
 def _fetch_ticker(symbol: str) -> dict:
-    """Binance Futures ticker — returns dict with same key names as Bybit ticker."""
-    # 24hr ticker
-    ticker = _get(BINANCE_FAPI + "/fapi/v1/ticker/24hr", {"symbol": symbol})
+    """Binance Spot ticker — returns dict with Bybit-compatible key names."""
+    ticker = _get(BINANCE_SPOT + "/api/v3/ticker/24hr", {"symbol": symbol})
 
-    # Funding rate (separate endpoint)
+    last_price = ticker.get("lastPrice", "0")
+
+    # Funding rate: try CoinGlass, fallback N/A
+    funding_rate = "0"
     try:
-        funding_data = _get(BINANCE_FAPI + "/fapi/v1/fundingRate",
-                            {"symbol": symbol, "limit": 1})
-        funding_rate = float(funding_data[0]["fundingRate"]) if funding_data else 0.0
+        base = symbol.replace("USDT", "")
+        cg = _get("https://open-api.coinglass.com/public/v2/funding",
+                  {"symbol": base}, timeout=5)
+        for item in cg.get("data", []):
+            if "Binance" in item.get("exchangeName", ""):
+                funding_rate = str(float(item.get("rate", 0)) / 100)
+                break
     except Exception:
-        funding_rate = 0.0
+        pass
 
-    # Open interest
-    try:
-        oi_data = _get(BINANCE_FAPI + "/fapi/v1/openInterest", {"symbol": symbol})
-        open_interest = float(oi_data.get("openInterest", 0)) * float(ticker.get("lastPrice", 0))
-    except Exception:
-        open_interest = 0.0
-
-    # Return dict with Bybit-compatible key names
     return {
-        "lastPrice":        ticker.get("lastPrice", "0"),
-        "markPrice":        ticker.get("markPrice", ticker.get("lastPrice", "0")),
-        "fundingRate":      str(funding_rate),
-        "openInterestValue": str(open_interest),
-        "volume24h":        ticker.get("volume", "0"),
-        "price24hPcnt":     str(float(ticker.get("priceChangePercent", 0)) / 100),
+        "lastPrice":         last_price,
+        "markPrice":         last_price,
+        "fundingRate":       funding_rate,
+        "openInterestValue": "N/A",
+        "volume24h":         ticker.get("volume", "0"),
+        "price24hPcnt":      str(float(ticker.get("priceChangePercent", 0)) / 100),
     }
 
 
@@ -401,7 +400,7 @@ def fetch_context(
 
     # Futures block
     lines.append(f"""
-── FUTURES (Binance Perp) ──────────────────
+── MARKET DATA (Binance Spot) ───────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}
@@ -494,7 +493,7 @@ def fetch_multi_tf_context(
             sections.append(f"── {tf.upper()} — veri alınamadı: {e}")
 
     sections.append(f"""
-── FUTURES (Binance Perp) ──────────────────
+── MARKET DATA (Binance Spot) ───────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}""")
