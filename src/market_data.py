@@ -1,4 +1,8 @@
-"""Bybit V5 market data fetcher — multi-source, multi-timeframe context builder."""
+"""Binance Futures market data fetcher — multi-source, multi-timeframe context builder.
+
+Bybit blocks Google Colab IPs (403). Switched to Binance Futures API which is accessible
+from cloud environments.
+"""
 
 from __future__ import annotations
 
@@ -6,20 +10,21 @@ import requests
 import pandas as pd
 import math
 
-BYBIT_BASE    = "https://api.bybit.com"
+# Binance Futures REST API — accessible from Colab/cloud
+BINANCE_FAPI   = "https://fapi.binance.com"
 COINGLASS_BASE = "https://open-api.coinglass.com/public/v2"
-FNG_URL       = "https://api.alternative.me/fng/"
+FNG_URL        = "https://api.alternative.me/fng/"
 
-# Human-readable timeframe aliases -> Bybit interval codes
+# Binance Futures uses the same TF codes as human-readable format
 TIMEFRAME_MAP: dict[str, str] = {
-    "1m":  "1",
-    "5m":  "5",
-    "15m": "15",
-    "30m": "30",
-    "1h":  "60",
-    "4h":  "240",
-    "1d":  "D",
-    "1w":  "W",
+    "1m":  "1m",
+    "5m":  "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h":  "1h",
+    "4h":  "4h",
+    "1d":  "1d",
+    "1w":  "1w",
 }
 
 # Timeframe display ordering (smallest → largest)
@@ -36,22 +41,17 @@ def _get(url: str, params: dict, timeout: int = 10) -> dict:
     return resp.json()
 
 
-def _bybit_get(path: str, params: dict) -> dict:
-    data = _get(BYBIT_BASE + path, params)
-    if data.get("retCode", 0) != 0:
-        raise RuntimeError(f"Bybit API error: {data.get('retMsg')} — params={params}")
-    return data["result"]
-
-
 def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    result = _bybit_get("/v5/market/kline", {
-        "category": "linear",
-        "symbol":   symbol,
-        "interval": interval,
-        "limit":    limit,
-    })
-    rows = result["list"]
-    df = pd.DataFrame(rows, columns=["ts", "open", "high", "low", "close", "volume", "turnover"])
+    """Binance Futures klines — returns same DataFrame schema as before."""
+    url  = BINANCE_FAPI + "/fapi/v1/klines"
+    rows = _get(url, {"symbol": symbol, "interval": interval, "limit": limit})
+    # Binance klines: [open_time, open, high, low, close, volume, close_time, ...]
+    df = pd.DataFrame(rows, columns=[
+        "ts", "open", "high", "low", "close", "volume",
+        "close_time", "quote_vol", "num_trades",
+        "taker_buy_base", "taker_buy_quote", "ignore",
+    ])
+    df = df[["ts", "open", "high", "low", "close", "volume"]].copy()
     df = df.astype({
         "ts": "int64", "open": "float64", "high": "float64",
         "low": "float64", "close": "float64", "volume": "float64",
@@ -60,9 +60,34 @@ def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
 
 
 def _fetch_ticker(symbol: str) -> dict:
-    result = _bybit_get("/v5/market/tickers", {"category": "linear", "symbol": symbol})
-    items = result.get("list", [])
-    return items[0] if items else {}
+    """Binance Futures ticker — returns dict with same key names as Bybit ticker."""
+    # 24hr ticker
+    ticker = _get(BINANCE_FAPI + "/fapi/v1/ticker/24hr", {"symbol": symbol})
+
+    # Funding rate (separate endpoint)
+    try:
+        funding_data = _get(BINANCE_FAPI + "/fapi/v1/fundingRate",
+                            {"symbol": symbol, "limit": 1})
+        funding_rate = float(funding_data[0]["fundingRate"]) if funding_data else 0.0
+    except Exception:
+        funding_rate = 0.0
+
+    # Open interest
+    try:
+        oi_data = _get(BINANCE_FAPI + "/fapi/v1/openInterest", {"symbol": symbol})
+        open_interest = float(oi_data.get("openInterest", 0)) * float(ticker.get("lastPrice", 0))
+    except Exception:
+        open_interest = 0.0
+
+    # Return dict with Bybit-compatible key names
+    return {
+        "lastPrice":        ticker.get("lastPrice", "0"),
+        "markPrice":        ticker.get("markPrice", ticker.get("lastPrice", "0")),
+        "fundingRate":      str(funding_rate),
+        "openInterestValue": str(open_interest),
+        "volume24h":        ticker.get("volume", "0"),
+        "price24hPcnt":     str(float(ticker.get("priceChangePercent", 0)) / 100),
+    }
 
 
 # ─────────────────────────────────────────────
@@ -376,7 +401,7 @@ def fetch_context(
 
     # Futures block
     lines.append(f"""
-── FUTURES (Bybit Linear) ──────────────────
+── FUTURES (Binance Perp) ──────────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}
@@ -469,7 +494,7 @@ def fetch_multi_tf_context(
             sections.append(f"── {tf.upper()} — veri alınamadı: {e}")
 
     sections.append(f"""
-── FUTURES (Bybit Linear) ──────────────────
+── FUTURES (Binance Perp) ──────────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}""")
