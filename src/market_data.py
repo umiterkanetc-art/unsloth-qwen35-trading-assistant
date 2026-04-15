@@ -1,7 +1,7 @@
-"""Binance Futures market data fetcher — multi-source, multi-timeframe context builder.
+"""KuCoin market data fetcher — multi-source, multi-timeframe context builder.
 
-Bybit blocks Google Colab IPs (403). Switched to Binance Futures API which is accessible
-from cloud environments.
+KuCoin public API is accessible from Google Colab/cloud IPs without geo-restrictions.
+(Bybit: 403, Binance Spot/Futures: 451 from US cloud IPs)
 """
 
 from __future__ import annotations
@@ -10,26 +10,32 @@ import requests
 import pandas as pd
 import math
 
-# Binance Spot REST API — no geo-restriction from cloud/Colab IPs
-# (Futures API /fapi.binance.com blocks US-based IPs with 451)
-BINANCE_SPOT   = "https://api.binance.com"
+# KuCoin REST API — accessible from Colab/cloud (no geo-restriction)
+KUCOIN_BASE    = "https://api.kucoin.com"
 COINGLASS_BASE = "https://open-api.coinglass.com/public/v2"
 FNG_URL        = "https://api.alternative.me/fng/"
 
-# Binance uses the same TF codes as human-readable format
+# KuCoin timeframe codes
 TIMEFRAME_MAP: dict[str, str] = {
-    "1m":  "1m",
-    "5m":  "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1h":  "1h",
-    "4h":  "4h",
-    "1d":  "1d",
-    "1w":  "1w",
+    "1m":  "1min",
+    "5m":  "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h":  "1hour",
+    "4h":  "4hour",
+    "1d":  "1day",
+    "1w":  "1week",
 }
 
 # Timeframe display ordering (smallest → largest)
 TF_ORDER = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+
+
+def _symbol_kucoin(symbol: str) -> str:
+    """BTCUSDT → BTC-USDT"""
+    if symbol.endswith("USDT"):
+        return symbol[:-4] + "-USDT"
+    return symbol
 
 
 # ─────────────────────────────────────────────
@@ -43,16 +49,17 @@ def _get(url: str, params: dict, timeout: int = 10) -> dict:
 
 
 def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
-    """Binance Spot klines — OHLCV, no geo-restriction from cloud IPs."""
-    url  = BINANCE_SPOT + "/api/v3/klines"
-    rows = _get(url, {"symbol": symbol, "interval": interval, "limit": limit})
-    # Binance klines: [open_time, open, high, low, close, volume, close_time, ...]
-    df = pd.DataFrame(rows, columns=[
-        "ts", "open", "high", "low", "close", "volume",
-        "close_time", "quote_vol", "num_trades",
-        "taker_buy_base", "taker_buy_quote", "ignore",
-    ])
+    """KuCoin klines — [ts_sec, open, close, high, low, vol, turnover] newest first."""
+    kc_sym = _symbol_kucoin(symbol)
+    url    = KUCOIN_BASE + "/api/v1/market/candles"
+    data   = _get(url, {"type": interval, "symbol": kc_sym})
+    rows   = data.get("data", [])
+    # KuCoin returns newest first — reverse for chronological order
+    rows   = list(reversed(rows[:limit]))
+    # columns: [time_sec, open, close, high, low, volume, turnover]
+    df = pd.DataFrame(rows, columns=["ts", "open", "close", "high", "low", "volume", "turnover"])
     df = df[["ts", "open", "high", "low", "close", "volume"]].copy()
+    df["ts"] = df["ts"].astype("int64") * 1000  # convert to ms
     df = df.astype({
         "ts": "int64", "open": "float64", "high": "float64",
         "low": "float64", "close": "float64", "volume": "float64",
@@ -61,31 +68,24 @@ def _fetch_klines(symbol: str, interval: str, limit: int = 200) -> pd.DataFrame:
 
 
 def _fetch_ticker(symbol: str) -> dict:
-    """Binance Spot ticker — returns dict with Bybit-compatible key names."""
-    ticker = _get(BINANCE_SPOT + "/api/v3/ticker/24hr", {"symbol": symbol})
+    """KuCoin 24hr stats — returns Bybit-compatible key names."""
+    kc_sym = _symbol_kucoin(symbol)
+    data   = _get(KUCOIN_BASE + "/api/v1/market/stats", {"symbol": kc_sym})
+    stats  = data.get("data", {})
 
-    last_price = ticker.get("lastPrice", "0")
-
-    # Funding rate: try CoinGlass, fallback N/A
-    funding_rate = "0"
+    last_price = stats.get("last", "0") or "0"
     try:
-        base = symbol.replace("USDT", "")
-        cg = _get("https://open-api.coinglass.com/public/v2/funding",
-                  {"symbol": base}, timeout=5)
-        for item in cg.get("data", []):
-            if "Binance" in item.get("exchangeName", ""):
-                funding_rate = str(float(item.get("rate", 0)) / 100)
-                break
-    except Exception:
-        pass
+        change_pct = str(float(stats.get("changeRate", 0)))
+    except (ValueError, TypeError):
+        change_pct = "0"
 
     return {
-        "lastPrice":         last_price,
-        "markPrice":         last_price,
-        "fundingRate":       funding_rate,
+        "lastPrice":         str(last_price),
+        "markPrice":         str(last_price),
+        "fundingRate":       "0",
         "openInterestValue": "N/A",
-        "volume24h":         ticker.get("volume", "0"),
-        "price24hPcnt":      str(float(ticker.get("priceChangePercent", 0)) / 100),
+        "volume24h":         str(stats.get("vol", "0")),
+        "price24hPcnt":      change_pct,
     }
 
 
@@ -400,7 +400,7 @@ def fetch_context(
 
     # Futures block
     lines.append(f"""
-── MARKET DATA (Binance Spot) ───────────────
+── MARKET DATA (KuCoin) ─────────────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}
@@ -493,7 +493,7 @@ def fetch_multi_tf_context(
             sections.append(f"── {tf.upper()} — veri alınamadı: {e}")
 
     sections.append(f"""
-── MARKET DATA (Binance Spot) ───────────────
+── MARKET DATA (KuCoin) ─────────────────────
 Funding rate  : {funding_pct}  {funding_note}
 Açık pozisyon : {open_interest} USDT
 Mark price    : {mark_price}""")
